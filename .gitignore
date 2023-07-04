@@ -1,0 +1,4 @@
+*data.xlsx
+*data.json
+.venv
+.DS_Store
