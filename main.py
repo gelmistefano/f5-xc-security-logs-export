@@ -3,29 +3,35 @@ F5 XC Security Event Logs Extraction
 
 This script extracts security events from XC (cross-cloud) and saves the data in either Excel or JSON format. It supports various command-line arguments to customize the extraction process.
 
-Usage:
-    python script.py [-h] -t TENANT -k KEY [-n NAMESPACE] [-l LOADBALANCER] [-d PREVIOUS_DAYS]
-                     [--skip-days SKIP_DAYS] [-L LIMIT_EVENTS] [-o OUTPUT] [-j] [-V]
+usage: 
+  main.py [-h] -t TENANT -k KEY [-n NAMESPACE] [-l LOADBALANCER] [-d PREVIOUS_DAYS] [--skip-days SKIP_DAYS] [-L LIMIT_EVENTS] [-o OUTPUT] [-j] [-F FROM_DATE] [-T TO_DATE] [-V] [-v]
 
-Arguments:
-    -h, --help                Show the help message and exit.
-    -t TENANT, --tenant TENANT
-                              Specify the name of the tenant for which security events will be extracted. (Required)
-    -k KEY, --key KEY         Specify the API token key for authentication. (Required)
-    -n NAMESPACE, --namespace NAMESPACE
-                              Specify the namespace ID. (Default: "default")
-    -l LOADBALANCER, --loadbalancer LOADBALANCER
-                              Specify the load balancer name. If not specified, all LBs will be extracted.
-    -d PREVIOUS_DAYS, --previous-days PREVIOUS_DAYS
-                              Specify the number of previous days to extract. (Default: 7)
-    --skip-days SKIP_DAYS     Specify the number of previous days to skip from extraction. (Default: 0)
-    -L LIMIT_EVENTS, --limit-events LIMIT_EVENTS
-                              Specify the limit on the number of events to extract. (Default: No limit)
-    -o OUTPUT, --output OUTPUT
-                              Output file name without extension (Default: "data")
-    -j, --json                Output the data in JSON format. If not specified, the output will be in Excel format.
-    -V, --verbose             Enable verbose mode for detailed logging.
+F5 XC Security Event Logs Extraction. Extract security logs from XC for a given tenant and save them to a JSON or Excel file.
 
+options:
+  -h, --help            show this help message and exit
+  -t TENANT, --tenant TENANT
+                        Tenant name
+  -k KEY, --key KEY     API Token Key
+  -n NAMESPACE, --namespace NAMESPACE
+                        Namespace ID (Default: "default")
+  -l LOADBALANCER, --loadbalancer LOADBALANCER
+                        Load Balancer name - If not specified, all LBs will be extracted
+  -d PREVIOUS_DAYS, --previous-days PREVIOUS_DAYS
+                        Previous days to extract (Default: 7)
+  --skip-days SKIP_DAYS
+                        Skip previous days to extract (Default: 0)
+  -L LIMIT_EVENTS, --limit-events LIMIT_EVENTS
+                        Limit the number of events to extract (Default: No limit)
+  -o OUTPUT, --output OUTPUT
+                        Output file name without extension (Default: "data")
+  -j, --json            Output in JSON format. If not specified, the output will be in Excel format
+  -F FROM_DATE, --from-date FROM_DATE
+                        From date in format YYYY-MM-DD[THH:MM:SS] (if you use --previous-days, this date will be ignored)
+  -T TO_DATE, --to-date TO_DATE
+                        To date in format YYYY-MM-DD[THH:MM:SS] (if you use --previous-days, this date will be ignored)
+  -V, --verbose         Verbose mode
+  -v, --version         Show version
 Examples:
     python script.py -t MyTenant -k MyApiKey
     python script.py -t MyTenant -k MyApiKey -n MyNamespace -l MyLoadBalancer -d 10 --skip-days 2 -L 100 -o mydata -j -V
@@ -41,6 +47,7 @@ import json
 import pandas as pd
 from datetime import datetime, timedelta
 import argparse
+from dateutil.parser import parse
 
 
 def getAggregatedSecEvents(lbs: list) -> list:
@@ -526,7 +533,7 @@ def main():
 
 # Create an argument parser
 parser = argparse.ArgumentParser(
-  description='F5 XC Security Event Logs Extraction')
+  description='F5 XC Security Event Logs Extraction.\nExtract security logs from XC for a given tenant and save them to a JSON or Excel file.')
 
 # Add the arguments you want to receive from the CLI
 parser.add_argument('-t', '--tenant', type=str,
@@ -537,20 +544,23 @@ parser.add_argument('-n', '--namespace', type=str,
                     default='default', help='Namespace ID (Default: "default")')
 parser.add_argument('-l', '--loadbalancer', type=str,
                     help='Load Balancer name - If not specified, all LBs will be extracted')
-parser.add_argument('-d', '--previous-days', type=int, default=7,
+parser.add_argument('-d', '--previous-days', type=int,
                     help='Previous days to extract (Default: 7)')
 parser.add_argument('--skip-days', type=int, default=0,
                     help='Skip previous days to extract (Default: 0)')
-parser.add_argument('-L', '--limit-events', type=int, default=0,
+parser.add_argument('-L', '--limit-events', type=int,
                     help='Limit the number of events to extract (Default: No limit)')
 parser.add_argument('-o', '--output', type=str, default='data',
                     help='Output file name without extension (Default: "data")')
 parser.add_argument('-j', '--json', action='store_true',
                     help='Output in JSON format. If not specified, the output will be in Excel format')
+parser.add_argument('-F', '--from-date', type=str,
+                    help='From date in format YYYY-MM-DD[THH:MM:SS] (if you use --previous-days, this date will be ignored)')
+parser.add_argument('-T', '--to-date', type=str,
+                    help='To date in format YYYY-MM-DD[THH:MM:SS] (if you use --previous-days, this date will be ignored)')
 parser.add_argument('-V', '--verbose', action='store_true', help='Verbose mode')
 parser.add_argument('-v', '--version', action='version', help='Show version',
                     version='F5 XC Security Event Logs Extraction 1.0.0 - By: @gelmistefano')
-
 
 # Parse the arguments from CLI
 args = parser.parse_args()
@@ -558,19 +568,30 @@ args = parser.parse_args()
 # Use the provided arguments or default values
 TENANT = args.tenant
 NAMESPACE = args.namespace
-DAYS = args.previous_days
 OUTPUT_FORMAT = 'json' if args.json else 'xlsx'
 OUTPUTFILE = args.output + '.' + OUTPUT_FORMAT
 LOADBALANCER = args.loadbalancer
-SKIP_DAYS = args.skip_days
+DAYS = args.previous_days if args.previous_days is not None else 7
+SKIP_DAYS = args.skip_days if args.skip_days is not None else 0
 LIMIT_EVENTS = args.limit_events
 VERBOSE = args.verbose
 HEADERS = {'Authorization': 'APIToken ' + args.key,
            'Content-type': 'application/json', 'accept': 'application/json'}
-END_TIME = (datetime.utcnow() - timedelta(hours=24 * SKIP_DAYS)
-            ).strftime("%Y-%m-%dT%H:%M:%S.000Z")
-START_TIME = (datetime.utcnow() - timedelta(hours=24 * DAYS)
-              ).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+try:
+  date_format = "%Y-%m-%dT%H:%M:%S.000Z"
+  if args.from_date is not None:
+    START_TIME = parse(args.from_date, ignoretz=True).strftime(date_format)
+  else:
+    START_TIME = (datetime.utcnow() - timedelta(hours=24 *
+                  SKIP_DAYS)).strftime(date_format)
+  if args.to_date is not None:
+    END_TIME = parse(args.to_date, ignoretz=True).strftime(date_format)
+  else:
+    END_TIME = (datetime.utcnow() - timedelta(hours=24 * DAYS)
+                ).strftime(date_format)
+except ValueError as e:
+  print("Invalid from date format, should be YYYY-MM-DD[THH:MM:SS]. Exiting...")
+  exit(1)
 IS_JSON = args.json
 
 # Main function

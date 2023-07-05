@@ -32,9 +32,9 @@ You need to provide the following global variables in the script according to yo
 You can use the `-h` or `--help` option to get the usage information:
 
 ```bash
-usage: main.py [-h] -t TENANT -k KEY [-n NAMESPACE] [-l LOADBALANCER] [-d PREVIOUS_DAYS] [--skip-days SKIP_DAYS] [-L LIMIT_EVENTS] [-o OUTPUT] [-j] [-V]
+usage: main.py [-h] -t TENANT -k KEY [-n NAMESPACE] [-l LOADBALANCER] [-d PREVIOUS_DAYS] [--skip-days SKIP_DAYS] [-L LIMIT_EVENTS] [-o OUTPUT] [-j] [-F FROM_DATE] [-T TO_DATE] [-V] [-v]
 
-F5 XC Security Event Logs Extraction
+F5 XC Security Event Logs Extraction. Extract security logs from XC for a given tenant and save them to a JSON or Excel file.
 
 options:
   -h, --help            show this help message and exit
@@ -54,6 +54,10 @@ options:
   -o OUTPUT, --output OUTPUT
                         Output file name without extension (Default: "data")
   -j, --json            Output in JSON format. If not specified, the output will be in Excel format
+  -F FROM_DATE, --from-date FROM_DATE
+                        From date in format YYYY-MM-DD[THH:MM:SS] (if you use --previous-days, this date will be ignored)
+  -T TO_DATE, --to-date TO_DATE
+                        To date in format YYYY-MM-DD[THH:MM:SS] (if you use --previous-days, this date will be ignored)
   -V, --verbose         Verbose mode
   -v, --version         Show version
 ```
