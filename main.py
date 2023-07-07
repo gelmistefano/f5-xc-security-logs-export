@@ -50,15 +50,15 @@ import argparse
 from dateutil.parser import parse
 
 
-def getAggregatedSecEvents(lbs: list) -> list:
+def getVirtualHostname(lbs: list) -> list:
   """
-    Retrieves aggregated security events for the specified load balancers.
+    Retrieves getVirtualHostname from aggregated security events.
 
     Parameters:
     - lbs (list): A list of load balancers.
 
     Returns:
-    - List[str]: A list of aggregated security events.
+    - List[str]: A list of Virtual Hostnames that match LBs name.
 
     Raises:
     - requests.RequestException: If an error occurs while making the API request.
@@ -76,9 +76,9 @@ def getAggregatedSecEvents(lbs: list) -> list:
     Example usage:
     ```
     lbs = [{'name': 'lb1'}, {'name': 'lb2'}]
-    events = getAggregatedSecEvents(lbs)
-    for event in events:
-        print(event)
+    vh_names = getVirtualHostname(lbs)
+    for vh_name in vh_names:
+        print(vh_name)
     ```
   """
 
@@ -296,107 +296,107 @@ def getSecEvents(lb_name: str, scroll_number: int, scroll_id: str | None = None)
   return obj
 
 
-def getSecEvents(lb_name, scroll_number, scroll_id=None):
-  obj = []
-  url = f'https://{TENANT}.console.ves.volterra.io/api/data/namespaces/{NAMESPACE}/app_security/events'
+# def getSecEvents(lb_name, scroll_number, scroll_id=None):
+#   obj = []
+#   url = f'https://{TENANT}.console.ves.volterra.io/api/data/namespaces/{NAMESPACE}/app_security/events'
 
-  end_time = (datetime.utcnow() - timedelta(hours=24 * SKIP_DAYS)
-              ).strftime("%Y-%m-%dT%H:%M:%S.000Z")
-  start_time = (datetime.utcnow() - timedelta(hours=24 * (DAYS))
-                ).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+#   end_time = (datetime.utcnow() - timedelta(hours=24 * SKIP_DAYS)
+#               ).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+#   start_time = (datetime.utcnow() - timedelta(hours=24 * (DAYS))
+#                 ).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
-  # Construct the URL with scroll ID if provided
-  if scroll_id != None:
-    url = url + '/scroll?scroll_id=' + scroll_id
-  else:
-    # Construct the request body
-    requestBody = {
-        'namespace': NAMESPACE,
-        'query': "{\"vh_name\"=" + lb_name + "\", sec_event_type=~\"waf_sec_event|bot_defense_sec_event|api_sec_event|svc_policy_sec_event\"}",
-        "aggs": {},
-        "scroll": True,
-        "start_time": start_time,
-        "end_time": end_time
-    }
+#   # Construct the URL with scroll ID if provided
+#   if scroll_id != None:
+#     url = url + '/scroll?scroll_id=' + scroll_id
+#   else:
+#     # Construct the request body
+#     requestBody = {
+#         'namespace': NAMESPACE,
+#         'query': "{\"vh_name\"=" + lb_name + "\", sec_event_type=~\"waf_sec_event|bot_defense_sec_event|api_sec_event|svc_policy_sec_event\"}",
+#         "aggs": {},
+#         "scroll": True,
+#         "start_time": start_time,
+#         "end_time": end_time
+#     }
 
-  # Print API call details if verbose mode is enabled
-  if VERBOSE:
-    print("Request URL: " + url)
-    print("Request headers: " + json.dumps(HEADERS))
-    print("Request body: " + json.dumps(requestBody))
+#   # Print API call details if verbose mode is enabled
+#   if VERBOSE:
+#     print("Request URL: " + url)
+#     print("Request headers: " + json.dumps(HEADERS))
+#     print("Request body: " + json.dumps(requestBody))
 
-  try:
-    # Make the API request
-    response = requests.post(
-        url, headers=HEADERS, json=requestBody) if scroll_id == None else requests.get(url, headers=HEADERS)
+#   try:
+#     # Make the API request
+#     response = requests.post(
+#         url, headers=HEADERS, json=requestBody) if scroll_id == None else requests.get(url, headers=HEADERS)
 
-    # Print response details if verbose mode is enabled
-    if VERBOSE:
-      print("Response code: " + str(response.status_code))
-      print("Response content: " + response.text)
-      print("Total Events: " +
-            str(json.loads(response.content)['total_hits']))
+#     # Print response details if verbose mode is enabled
+#     if VERBOSE:
+#       print("Response code: " + str(response.status_code))
+#       print("Response content: " + response.text)
+#       print("Total Events: " +
+#             str(json.loads(response.content)['total_hits']))
 
-    if scroll_id == None:
-      events_gets = 1
-      # 500 is the maximum number of events that can be returned at once
-      # if the total number of events is more than 500, then set the number of events to 500
-      # unless there is a limit set by the user
-      if int(json.loads(response.content)['total_hits']) > 500:
-        events_gets_to = 500
-      elif LIMIT_EVENTS > 0:
-        events_gets_to = LIMIT_EVENTS
-      else:
-        events_gets_to = int(json.loads(
-            response.content)['total_hits'])
-    else:
-      events_gets = 500 * scroll_number
-      if LIMIT_EVENTS > 0 and LIMIT_EVENTS < events_gets + 500:
-        events_gets_to = LIMIT_EVENTS
-      elif int(json.loads(response.content)['total_hits']) < events_gets + 500:
-        events_gets_to = int(json.loads(
-            response.content)['total_hits'])
-      else:
-        events_gets_to = events_gets + 500
-    print("Get events " + str(events_gets) + ' of ' + str(events_gets_to) +
-          ' - Total: ' + str(json.loads(response.content)['total_hits']))
+#     if scroll_id == None:
+#       events_gets = 1
+#       # 500 is the maximum number of events that can be returned at once
+#       # if the total number of events is more than 500, then set the number of events to 500
+#       # unless there is a limit set by the user
+#       if int(json.loads(response.content)['total_hits']) > 500:
+#         events_gets_to = 500
+#       elif LIMIT_EVENTS > 0:
+#         events_gets_to = LIMIT_EVENTS
+#       else:
+#         events_gets_to = int(json.loads(
+#             response.content)['total_hits'])
+#     else:
+#       events_gets = 500 * scroll_number
+#       if LIMIT_EVENTS > 0 and LIMIT_EVENTS < events_gets + 500:
+#         events_gets_to = LIMIT_EVENTS
+#       elif int(json.loads(response.content)['total_hits']) < events_gets + 500:
+#         events_gets_to = int(json.loads(
+#             response.content)['total_hits'])
+#       else:
+#         events_gets_to = events_gets + 500
+#     print("Get events " + str(events_gets) + ' of ' + str(events_gets_to) +
+#           ' - Total: ' + str(json.loads(response.content)['total_hits']))
 
-    if response.status_code == 200:
-      # Append each event to the list
-      for event in json.loads(response.content)['events']:
-        obj.append(json.loads(event))
-    else:
-      # Print error message and return an empty list
-      print('Error for LB ' + lb_name +
-            ' - Start Date: ' + start_time +
-            ' - End Date: ' + end_time +
-            ': ' +
-            str(response.status_code) +
-            "\n" +
-            response.text)
-      return []
+#     if response.status_code == 200:
+#       # Append each event to the list
+#       for event in json.loads(response.content)['events']:
+#         obj.append(json.loads(event))
+#     else:
+#       # Print error message and return an empty list
+#       print('Error for LB ' + lb_name +
+#             ' - Start Date: ' + start_time +
+#             ' - End Date: ' + end_time +
+#             ': ' +
+#             str(response.status_code) +
+#             "\n" +
+#             response.text)
+#       return []
 
-    # Recursive call if there is a scroll ID present
-    if json.loads(response.content)['scroll_id'] != "":
-      next_scroll_num = scroll_number + 1
-      num_events_stored = int(len(obj)) + (500 * int(scroll_number))
-      if VERBOSE:
-        print('Events now: ' + str(len(obj)))
-        print("scroll number: " + str(scroll_number))
-        print("Next scroll number: " + str(next_scroll_num))
-        print('Next events: ' + str(next_scroll_num * 500))
-        print('Events stored: ' + str(num_events_stored))
-      if (num_events_stored) < LIMIT_EVENTS and LIMIT_EVENTS > 0:
-        obj_tmp = getSecEvents(lb_name, next_scroll_num, json.loads(
-            response.content)['scroll_id'])
-        for obj_tmp_item in obj_tmp:
-          obj.append(obj_tmp_item)
-  except Exception as e:
-    # Print error message and return an empty list
-    print('Error for LB ' + lb_name +
-          str(e))
-    return []
-  return obj
+#     # Recursive call if there is a scroll ID present
+#     if json.loads(response.content)['scroll_id'] != "":
+#       next_scroll_num = scroll_number + 1
+#       num_events_stored = int(len(obj)) + (500 * int(scroll_number))
+#       if VERBOSE:
+#         print('Events now: ' + str(len(obj)))
+#         print("scroll number: " + str(scroll_number))
+#         print("Next scroll number: " + str(next_scroll_num))
+#         print('Next events: ' + str(next_scroll_num * 500))
+#         print('Events stored: ' + str(num_events_stored))
+#       if (num_events_stored) < LIMIT_EVENTS and LIMIT_EVENTS > 0:
+#         obj_tmp = getSecEvents(lb_name, next_scroll_num, json.loads(
+#             response.content)['scroll_id'])
+#         for obj_tmp_item in obj_tmp:
+#           obj.append(obj_tmp_item)
+#   except Exception as e:
+#     # Print error message and return an empty list
+#     print('Error for LB ' + lb_name +
+#           str(e))
+#     return []
+#   return obj
 
 
 def saveToJSON(data: list):
@@ -485,7 +485,7 @@ def main():
     print("No LBs found for tenant: {}\nExiting...".format(TENANT))
     exit(1)
 
-  vh_name = getAggregatedSecEvents(lbs)
+  vh_name = getVirtualHostname(lbs)
   if len(vh_name) == 0:
     print("No VHs found for tenant: {}\nExiting...".format(TENANT))
     exit(1)
@@ -583,11 +583,11 @@ try:
     START_TIME = parse(args.from_date, ignoretz=True).strftime(date_format)
   else:
     START_TIME = (datetime.utcnow() - timedelta(hours=24 *
-                  SKIP_DAYS)).strftime(date_format)
+                  DAYS)).strftime(date_format)
   if args.to_date is not None:
     END_TIME = parse(args.to_date, ignoretz=True).strftime(date_format)
   else:
-    END_TIME = (datetime.utcnow() - timedelta(hours=24 * DAYS)
+    END_TIME = (datetime.utcnow() - timedelta(hours=24 * SKIP_DAYS)
                 ).strftime(date_format)
 except ValueError as e:
   print("Invalid from date format, should be YYYY-MM-DD[THH:MM:SS]. Exiting...")
