@@ -27,6 +27,9 @@ You need to provide the following global variables in the script according to yo
 - LOADBALANCER: The name of the load balancer to retrieve security events for. Set to 'all' to retrieve events for all load balancers.
 - PREVIOUS DAYS: How many days you want to extract from today.
 - SKIP DAYS: How many days you want to skip for extraction from today.
+- LIMIT EVENTS: The maximum number of events to extract. Set to 0 for no limit. _(See Known Issue for events limit)_
+- FROM_DATE (in datetime format: YYYY-MM-DD[THH:MM:SS]): The start date to extract events from. If you use `PREVIOUS_DAYS` or `SKIP_DAYS`, this date will be ignored.
+- TO_DATE (in datetime format: YYYY-MM-DD[THH:MM:SS]): The end date to extract events to. If you use `PREVIOUS_DAYS` or `SKIP_DAYS`, this date will be ignored.
 - VERBOSE: A flag indicating whether to print detailed information about the API request and response.
 
 You can use the `-h` or `--help` option to get the usage information:
@@ -61,3 +64,13 @@ options:
   -V, --verbose         Verbose mode
   -v, --version         Show version
 ```
+
+## Known Issues
+
+- If the events to be exported are too many, the script may fail with the following error:
+
+```bash
+RecursionError: maximum recursion depth exceeded while calling a Python object
+```
+
+This is a known issue. To fix this, you need to increase the recursion limit by increase the `RECURSION_LIMIT` variable to the beginning of the script. The default value is 5000 (2.5M events).

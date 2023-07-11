@@ -48,6 +48,70 @@ import pandas as pd
 from datetime import datetime, timedelta
 import argparse
 from dateutil.parser import parse
+import sys
+
+RECUSION_LIMIT = 5000
+
+
+class recursion_depth:
+  def __init__(self, limit):
+    self.limit = limit
+    self.default_limit = sys.getrecursionlimit()
+
+  def __enter__(self):
+    sys.setrecursionlimit(self.limit)
+
+  def __exit__(self, type, value, traceback):
+    sys.setrecursionlimit(self.default_limit)
+
+
+def sendXCGetsRequest(url: str) -> dict:
+  # Print API call details if verbose mode is enabled
+  if VERBOSE:
+    print(f"Request URL: {url}")
+    print(f"Request headers: {json.dumps(HEADERS, indent=2)}")
+
+  try:
+    response_lb = requests.get(url, headers=HEADERS)
+    response_lb.raise_for_status()  # Raise an exception for non-200 status codes
+    data = response_lb.json()  # Parse the JSON response
+
+    if VERBOSE:
+      print(f"Response code: {response_lb.status_code}")
+      print(f"Response content: {response_lb.text}")
+
+    return data
+
+  except (requests.RequestException) as e:
+    print(f"Error GET Request: {e}")
+    raise
+
+
+def sendXCPostRequest(url: str, requestBody: dict) -> dict:
+  # Print API call details if verbose mode is enabled
+  if VERBOSE:
+    print(f"Request URL: {url}")
+    print(f"Request headers: {json.dumps(HEADERS, indent=2)}")
+    print(f"Request body: {json.dumps(requestBody, indent=2)}")
+
+  try:
+    # Make the API request
+    response = requests.post(
+        url, headers=HEADERS, json=requestBody)
+
+    response.raise_for_status()  # Raise an exception for non-200 status codes
+    data = response.json()
+
+    # Print response details if verbose mode is enabled
+    if VERBOSE:
+      print(f"Response code: {response.status_code}")
+      print(f"Response content: {response.text}")
+
+    return data
+
+  except (requests.RequestException, ValueError, Exception) as e:
+    print(f"Error POST Request: {e}")
+    raise
 
 
 def getVirtualHostname(lbs: list) -> list:
@@ -102,25 +166,8 @@ def getVirtualHostname(lbs: list) -> list:
       "end_time": END_TIME,
   }
 
-  # Print API call details if verbose mode is enabled
-  if VERBOSE:
-    print("Request URL: " + url)
-    print("Request headers: " + json.dumps(HEADERS))
-    print("Request body: " + json.dumps(requestBody))
-
   try:
-    # Make the API request
-    response = requests.post(
-        url, headers=HEADERS, json=requestBody)
-
-    response.raise_for_status()  # Raise an exception for non-200 status codes
-    data = response.json()
-
-    # Print response details if verbose mode is enabled
-    if VERBOSE:
-      print("Response code: " + str(response.status_code))
-      print("Response content: " + response.text)
-
+    data = sendXCPostRequest(url, requestBody)
     vh_name = []
     for vh in data['aggs']['fieldAggregation_VH_NAME_100']['field_aggregation']['buckets']:
       for lb in lbs:
@@ -129,8 +176,8 @@ def getVirtualHostname(lbs: list) -> list:
 
     return vh_name
 
-  except (requests.RequestException, ValueError) as e:
-    print("Error GET Security Events: ", e)
+  except (requests.RequestException, ValueError, Exception) as e:
+    print(f"Error GET Security Events: {e}")
     return []
 
 
@@ -156,23 +203,14 @@ def getLoadBalancers() -> list:
   if VERBOSE:
     print("Execute API calls to retrieve LBs")
   try:
-    response_lb = requests.get(url_lb, headers=HEADERS)
-    response_lb.raise_for_status()  # Raise an exception for non-200 status codes
-    json_response = response_lb.json()  # Parse the JSON response
-
-    if VERBOSE:
-      print("Call API for LBs")
-      print("Request URL: " + url_lb)
-      print("Request headers: " + json.dumps(HEADERS))
-      print("Response code: " + str(response_lb.status_code))
-      print("Response content: " + response_lb.text)
+    json_response = sendXCGetsRequest(url_lb)
 
     if LOADBALANCER == 'all':
       return json_response['items']
     return [lb for lb in json_response['items'] if lb['name'] == LOADBALANCER]
 
-  except (requests.RequestException, ValueError) as e:
-    print("Error GET Load Balancers: ", e)
+  except (requests.RequestException, ValueError, Exception) as e:
+    print(f"Error GET Load Balancers: {e}")
     return []
 
 
@@ -219,50 +257,32 @@ def getSecEvents(lb_name: str, scroll_number: int, scroll_id: str | None = None)
   # Construct the request body
   requestBody = {
       'namespace': NAMESPACE,
-      'query': f'{{"vh_name": "{lb_name}", "sec_event_type":~"waf_sec_event|bot_defense_sec_event|api_sec_event|svc_policy_sec_event"}}',
+      'query': f'{{vh_name="{lb_name}", sec_event_type=~"waf_sec_event|bot_defense_sec_event|api_sec_event|svc_policy_sec_event"}}',
       "aggs": {},
       "scroll": True,
       "start_time": START_TIME,
       "end_time": END_TIME
   }
 
-  # Print API call details if verbose mode is enabled
-  if VERBOSE:
-    print("Request URL: " + url)
-    print("Request headers: " + json.dumps(HEADERS))
-    print("Request body: " + json.dumps(requestBody))
-
   try:
     # Make the API request
-    response = requests.post(
-        url, headers=HEADERS, json=requestBody) if scroll_id is None else requests.get(url, headers=HEADERS)
+    data = sendXCPostRequest(
+      url, requestBody) if scroll_id is None else sendXCGetsRequest(url)
 
-    response.raise_for_status()  # Raise an exception for non-200 status codes
-    data = response.json()
-
-    # Print response details if verbose mode is enabled
     if VERBOSE:
-      print("Response code: " + str(response.status_code))
-      print("Response content: " + response.text)
-      print("Total Events: " + str(data['total_hits']))
+      print(f"Total Events: {(data['total_hits'])}")
 
     if data['total_hits'] == 0:
-      print("No events found for " + lb_name)
+      print(f"No events found for {lb_name}")
       return []
 
-    if scroll_id is None:
-      total_hits = data['total_hits']
-      events_gets = 1
-      events_gets_to = min(
-          LIMIT_EVENTS, total_hits) if LIMIT_EVENTS > 0 else total_hits
-    else:
-      events_gets = 500 * scroll_number
-      total_hits = data['total_hits']
-      events_gets_to = min(
-          LIMIT_EVENTS, total_hits) if LIMIT_EVENTS > 0 else total_hits
+    total_hits = int(data['total_hits'])
+    events_gets_to = len(data['events']) if scroll_id is None else len(
+      data['events']) + 500 * scroll_number
+    total_events = total_hits if LIMIT_EVENTS == 0 else LIMIT_EVENTS
 
-    print("Get events " + str(events_gets) + ' of ' +
-          str(events_gets_to) + ' - Total: ' + str(total_hits))
+    print(
+      f"Request #{scroll_number + 1}: Got {events_gets_to} events of {total_events}")
 
     # Append each event to the list
     for event in data['events']:
@@ -274,129 +294,22 @@ def getSecEvents(lb_name: str, scroll_number: int, scroll_id: str | None = None)
       next_scroll_num = scroll_number + 1
       num_events_stored = len(obj) + (500 * scroll_number)
       if VERBOSE:
-        print('Events now: ' + str(len(obj)))
-        print("scroll number: " + str(scroll_number))
-        print("Next scroll number: " + str(next_scroll_num))
-        print('Next events: ' + str(next_scroll_num * 500))
-        print('Events stored: ' + str(num_events_stored))
-      if num_events_stored < LIMIT_EVENTS and LIMIT_EVENTS > 0:
+        print(f'Events now: {len(obj)}')
+        print(f"scroll number: {scroll_number}")
+        print(f"Next scroll number: {next_scroll_num}")
+        print(f'Next events: {next_scroll_num * 500}')
+        print(f'Events stored: {num_events_stored}')
+        print(f'Limit events: {LIMIT_EVENTS}')
+      if (num_events_stored < LIMIT_EVENTS and LIMIT_EVENTS > 0) or num_events_stored < total_hits:
         obj_tmp = getSecEvents(lb_name, next_scroll_num, scroll_id)
         obj.extend(obj_tmp)
 
-  except requests.RequestException as e:
+  except (requests.RequestException, ValueError, Exception) as e:
     # Print error message and return an empty list
-    print('Error requests.RequestException for LB ' + lb_name + ': ' + str(e))
-    return []
-
-  except ValueError as e:
-    # Print error message and return an empty list
-    print('Error ValueError for LB ' + lb_name + ': ' + str(e))
+    print(f'Error Exception for LB {lb_name}: {e}')
     return []
 
   return obj
-
-
-# def getSecEvents(lb_name, scroll_number, scroll_id=None):
-#   obj = []
-#   url = f'https://{TENANT}.console.ves.volterra.io/api/data/namespaces/{NAMESPACE}/app_security/events'
-
-#   end_time = (datetime.utcnow() - timedelta(hours=24 * SKIP_DAYS)
-#               ).strftime("%Y-%m-%dT%H:%M:%S.000Z")
-#   start_time = (datetime.utcnow() - timedelta(hours=24 * (DAYS))
-#                 ).strftime("%Y-%m-%dT%H:%M:%S.000Z")
-
-#   # Construct the URL with scroll ID if provided
-#   if scroll_id != None:
-#     url = url + '/scroll?scroll_id=' + scroll_id
-#   else:
-#     # Construct the request body
-#     requestBody = {
-#         'namespace': NAMESPACE,
-#         'query': "{\"vh_name\"=" + lb_name + "\", sec_event_type=~\"waf_sec_event|bot_defense_sec_event|api_sec_event|svc_policy_sec_event\"}",
-#         "aggs": {},
-#         "scroll": True,
-#         "start_time": start_time,
-#         "end_time": end_time
-#     }
-
-#   # Print API call details if verbose mode is enabled
-#   if VERBOSE:
-#     print("Request URL: " + url)
-#     print("Request headers: " + json.dumps(HEADERS))
-#     print("Request body: " + json.dumps(requestBody))
-
-#   try:
-#     # Make the API request
-#     response = requests.post(
-#         url, headers=HEADERS, json=requestBody) if scroll_id == None else requests.get(url, headers=HEADERS)
-
-#     # Print response details if verbose mode is enabled
-#     if VERBOSE:
-#       print("Response code: " + str(response.status_code))
-#       print("Response content: " + response.text)
-#       print("Total Events: " +
-#             str(json.loads(response.content)['total_hits']))
-
-#     if scroll_id == None:
-#       events_gets = 1
-#       # 500 is the maximum number of events that can be returned at once
-#       # if the total number of events is more than 500, then set the number of events to 500
-#       # unless there is a limit set by the user
-#       if int(json.loads(response.content)['total_hits']) > 500:
-#         events_gets_to = 500
-#       elif LIMIT_EVENTS > 0:
-#         events_gets_to = LIMIT_EVENTS
-#       else:
-#         events_gets_to = int(json.loads(
-#             response.content)['total_hits'])
-#     else:
-#       events_gets = 500 * scroll_number
-#       if LIMIT_EVENTS > 0 and LIMIT_EVENTS < events_gets + 500:
-#         events_gets_to = LIMIT_EVENTS
-#       elif int(json.loads(response.content)['total_hits']) < events_gets + 500:
-#         events_gets_to = int(json.loads(
-#             response.content)['total_hits'])
-#       else:
-#         events_gets_to = events_gets + 500
-#     print("Get events " + str(events_gets) + ' of ' + str(events_gets_to) +
-#           ' - Total: ' + str(json.loads(response.content)['total_hits']))
-
-#     if response.status_code == 200:
-#       # Append each event to the list
-#       for event in json.loads(response.content)['events']:
-#         obj.append(json.loads(event))
-#     else:
-#       # Print error message and return an empty list
-#       print('Error for LB ' + lb_name +
-#             ' - Start Date: ' + start_time +
-#             ' - End Date: ' + end_time +
-#             ': ' +
-#             str(response.status_code) +
-#             "\n" +
-#             response.text)
-#       return []
-
-#     # Recursive call if there is a scroll ID present
-#     if json.loads(response.content)['scroll_id'] != "":
-#       next_scroll_num = scroll_number + 1
-#       num_events_stored = int(len(obj)) + (500 * int(scroll_number))
-#       if VERBOSE:
-#         print('Events now: ' + str(len(obj)))
-#         print("scroll number: " + str(scroll_number))
-#         print("Next scroll number: " + str(next_scroll_num))
-#         print('Next events: ' + str(next_scroll_num * 500))
-#         print('Events stored: ' + str(num_events_stored))
-#       if (num_events_stored) < LIMIT_EVENTS and LIMIT_EVENTS > 0:
-#         obj_tmp = getSecEvents(lb_name, next_scroll_num, json.loads(
-#             response.content)['scroll_id'])
-#         for obj_tmp_item in obj_tmp:
-#           obj.append(obj_tmp_item)
-#   except Exception as e:
-#     # Print error message and return an empty list
-#     print('Error for LB ' + lb_name +
-#           str(e))
-#     return []
-#   return obj
 
 
 def saveToJSON(data: list):
@@ -451,13 +364,12 @@ def saveToExcel(data: dict) -> bool:
       df.to_excel(writer, sheet_name=sheet, index=False)
 
     # Save the Excel file
-    writer.save()
     writer.close()
 
     return True
 
   except Exception as e:
-    print("Error Pandas Exception: " + str(e))
+    print(f"Error Pandas Exception: {e}")
     return False
 
 
@@ -469,42 +381,45 @@ def main():
         None
   """
   print("XC Security Data Extraction")
-  print("Extract security events from XC for tenant: {}".format(TENANT))
-  print("Namespace: {}".format(NAMESPACE))
-  print("Load Balancer: {}".format(LOADBALANCER))
-  print("Previous days to extract: {}".format(DAYS))
-  print("Skip previous days to extract: {}".format(SKIP_DAYS))
-  print("Extract events from: {} to {}".format(START_TIME, END_TIME))
-  print("Limit events to extract: {}".format(LIMIT_EVENTS))
-  print("Output file name: {}".format(OUTPUTFILE))
+  print(f"Extract security events from XC for tenant: {TENANT}")
+  print(f"Namespace: {NAMESPACE}")
+  print(f"Load Balancer: {LOADBALANCER}")
+  print(
+    f"Extract events from: {datetime.strptime(START_TIME, DATE_FORMAT):%d/%m/%Y %H:%M:%S}")
+  print(
+    f"Extract events to  : {datetime.strptime(END_TIME, DATE_FORMAT):%d/%m/%Y %H:%M:%S}")
+  print("Limit events to extract: {}".format(
+    LIMIT_EVENTS if LIMIT_EVENTS > 0 else "No limit"))
+  print(f"Output file name: {OUTPUTFILE}")
   print("\n")
 
   # Execute API calls to retrieve LBs
   lbs = getLoadBalancers()
   if len(lbs) == 0:
-    print("No LBs found for tenant: {}\nExiting...".format(TENANT))
+    print(f"No LBs found for tenant: {TENANT}\nExiting...")
     exit(1)
 
   vh_name = getVirtualHostname(lbs)
   if len(vh_name) == 0:
-    print("No VHs found for tenant: {}\nExiting...".format(TENANT))
+    print(f"No VHs found for tenant: {TENANT}\nExiting...")
     exit(1)
 
   if VERBOSE:
     print("Request all LBs") if LOADBALANCER == 'all' else print(
-        "Request LB: {}".format(LOADBALANCER))
-    print(json.dumps(lbs, indent=2))
+        "Request LB: {LOADBALANCER}")
+    print(f"Load Balancers list: {json.dumps(lbs, indent=2)}")
     print("\n")
     print("Request all VHs") if LOADBALANCER == 'all' else print("Request VH")
-    print(json.dumps(vh_name, indent=2))
+    print(f"Virtual Host list: {json.dumps(vh_name, indent=2)}")
 
   obj_events = {}
   for vh in vh_name:
-    print("Request events for LB: {}".format(vh))
-    obj_events[vh] = getSecEvents(vh, 0)
+    print(f"Request events for LB: {vh}")
+    with recursion_depth(RECUSION_LIMIT):
+      obj_events[vh] = getSecEvents(vh, 0)
 
   if len(obj_events) == 0:
-    print("No events found for tenant: {}\nExiting...".format(TENANT))
+    print(f"No events found for tenant: {TENANT}\nExiting...")
     exit(1)
 
   supported_event_types = {
@@ -515,16 +430,15 @@ def main():
     for event in events:
       event_type = event['sec_event_type']
       if event_type not in supported_event_types:
-        print("Event type {} not supported".format(event_type))
+        print(f"Event type {event_type} not supported")
         break
       obj_events_saved[event_type].append(event)
 
-  print("Extracted events: {}".format(len(obj_events)))
   for key, value in obj_events_saved.items():
-    print("Extracted events with type {}: {}".format(key, len(value)))
+    print(f"Extracted events with type {key}: {len(value)}")
   print("\n")
 
-  print("Save data in file: {}".format(OUTPUTFILE))
+  print(f"Save data in file: {OUTPUTFILE}")
   resulSave = saveToJSON(
     obj_events_saved) if IS_JSON else saveToExcel(obj_events_saved)
   if resulSave:
@@ -566,33 +480,33 @@ parser.add_argument('-v', '--version', action='version', help='Show version',
 args = parser.parse_args()
 
 # Use the provided arguments or default values
-TENANT = args.tenant
-NAMESPACE = args.namespace
-OUTPUT_FORMAT = 'json' if args.json else 'xlsx'
-OUTPUTFILE = args.output + '.' + OUTPUT_FORMAT
-LOADBALANCER = args.loadbalancer
-DAYS = args.previous_days if args.previous_days is not None else 7
-SKIP_DAYS = args.skip_days if args.skip_days is not None else 0
-LIMIT_EVENTS = args.limit_events
-VERBOSE = args.verbose
+TENANT: str = args.tenant
+NAMESPACE: str = args.namespace
+IS_JSON: bool = args.json
+OUTPUT_FORMAT: str = 'json' if IS_JSON else 'xlsx'
+OUTPUTFILE: str = args.output + '.' + OUTPUT_FORMAT
+LOADBALANCER: str = args.loadbalancer or 'all'
+DAYS: int = args.previous_days if args.previous_days is not None else 7
+SKIP_DAYS: int = args.skip_days if args.skip_days is not None else 0
+LIMIT_EVENTS: int = args.limit_events or 0
+VERBOSE: bool = args.verbose
 HEADERS = {'Authorization': 'APIToken ' + args.key,
            'Content-type': 'application/json', 'accept': 'application/json'}
+DATE_FORMAT = "%Y-%m-%dT%H:%M:%S.000Z"
 try:
-  date_format = "%Y-%m-%dT%H:%M:%S.000Z"
   if args.from_date is not None:
-    START_TIME = parse(args.from_date, ignoretz=True).strftime(date_format)
+    START_TIME = parse(args.from_date, ignoretz=True).strftime(DATE_FORMAT)
   else:
     START_TIME = (datetime.utcnow() - timedelta(hours=24 *
-                  DAYS)).strftime(date_format)
+                  DAYS)).strftime(DATE_FORMAT)
   if args.to_date is not None:
-    END_TIME = parse(args.to_date, ignoretz=True).strftime(date_format)
+    END_TIME = parse(args.to_date, ignoretz=True).strftime(DATE_FORMAT)
   else:
     END_TIME = (datetime.utcnow() - timedelta(hours=24 * SKIP_DAYS)
-                ).strftime(date_format)
+                ).strftime(DATE_FORMAT)
 except ValueError as e:
   print("Invalid from date format, should be YYYY-MM-DD[THH:MM:SS]. Exiting...")
   exit(1)
-IS_JSON = args.json
 
 # Main function
 main()
