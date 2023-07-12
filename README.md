@@ -25,17 +25,17 @@ You need to provide the following global variables in the script according to yo
 - NAMESPACE: The namespace information for constructing the API URL.
 - TOKEN: The API Token to be included in the API requests.
 - LOADBALANCER: The name of the load balancer to retrieve security events for. Set to 'all' to retrieve events for all load balancers.
-- PREVIOUS DAYS: How many days you want to extract from today.
-- SKIP DAYS: How many days you want to skip for extraction from today.
+- PREVIOUS DAYS: How many days you want to extract from today. If you use `FROM_DATE` argument, this argument will be ignored.
+- SKIP DAYS: How many days you want to skip for extraction from today. If you use `TO_DATE` argument, this argument will be ignored.
 - LIMIT EVENTS: The maximum number of events to extract. Set to 0 for no limit. _(See Known Issue for events limit)_
-- FROM_DATE (in datetime format: YYYY-MM-DD[THH:MM:SS]): The start date to extract events from. If you use `PREVIOUS_DAYS` or `SKIP_DAYS`, this date will be ignored.
-- TO_DATE (in datetime format: YYYY-MM-DD[THH:MM:SS]): The end date to extract events to. If you use `PREVIOUS_DAYS` or `SKIP_DAYS`, this date will be ignored.
+- FROM_DATE (in datetime format: YYYY-MM-DD[THH:MM:SS]): The start date to extract events from.
+- TO_DATE (in datetime format: YYYY-MM-DD[THH:MM:SS]): The end date to extract events to.
 - VERBOSE: A flag indicating whether to print detailed information about the API request and response.
 
 You can use the `-h` or `--help` option to get the usage information:
 
 ```bash
-usage: main.py [-h] -t TENANT -k KEY [-n NAMESPACE] [-l LOADBALANCER] [-d PREVIOUS_DAYS] [--skip-days SKIP_DAYS] [-L LIMIT_EVENTS] [-o OUTPUT] [-j] [-F FROM_DATE] [-T TO_DATE] [-V] [-v]
+usage: main.py [-h] -t TENANT -k API_KEY [-n NAMESPACE] [-l LOADBALANCER] [-d PREVIOUS_DAYS] [--skip-days SKIP_DAYS] [-L LIMIT_EVENTS] [-o OUTPUT] [-j] [-F FROM_DATE] [-T TO_DATE] [-v] [--version]
 
 F5 XC Security Event Logs Extraction. Extract security logs from XC for a given tenant and save them to a JSON or Excel file.
 
@@ -43,26 +43,27 @@ options:
   -h, --help            show this help message and exit
   -t TENANT, --tenant TENANT
                         Tenant name
-  -k KEY, --key KEY     API Token Key
+  -k API_KEY, --api-key API_KEY
+                        API Token Key
   -n NAMESPACE, --namespace NAMESPACE
                         Namespace ID (Default: "default")
   -l LOADBALANCER, --loadbalancer LOADBALANCER
                         Load Balancer name - If not specified, all LBs will be extracted
   -d PREVIOUS_DAYS, --previous-days PREVIOUS_DAYS
-                        Previous days to extract (Default: 7)
+                        Previous days to extract (Default: 7 - if you use --from-date, this argument will be ignored)
   --skip-days SKIP_DAYS
-                        Skip previous days to extract (Default: 0)
+                        Skip previous days to extract (Default: 0 - if you use --to-date, this argument will be ignored)
   -L LIMIT_EVENTS, --limit-events LIMIT_EVENTS
                         Limit the number of events to extract (Default: No limit)
   -o OUTPUT, --output OUTPUT
                         Output file name without extension (Default: "data")
   -j, --json            Output in JSON format. If not specified, the output will be in Excel format
   -F FROM_DATE, --from-date FROM_DATE
-                        From date in format YYYY-MM-DD[THH:MM:SS] (if you use --previous-days, this date will be ignored)
+                        From date in format YYYY-MM-DD[THH:MM:SS]
   -T TO_DATE, --to-date TO_DATE
-                        To date in format YYYY-MM-DD[THH:MM:SS] (if you use --previous-days, this date will be ignored)
-  -V, --verbose         Verbose mode
-  -v, --version         Show version
+                        To date in format YYYY-MM-DD[THH:MM:SS]
+  -v, --verbose         Verbose mode
+  --version             Show version
 ```
 
 ## Known Issues
