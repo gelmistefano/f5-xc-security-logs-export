@@ -358,8 +358,10 @@ class XC:
         return []
 
       if total_hits > 500 and scroll_id is not None:
-        events_gets_to = len(data['events']) if (500 * scroll_number +
-                                                 500) <= self.limit_events else self.limit_events
+        if self.limit_events == 0 or (500 * scroll_number + 500) <= self.limit_events:
+          events_gets_to = len(data['events']) + 500 * scroll_number
+        else:
+          events_gets_to = self.limit_events
       else:
         events_gets_to = len(data['events']) if scroll_id is None else len(data['events']) + 500 * scroll_number
 
